@@ -1,0 +1,66 @@
+/* GENEL AYARLAR */
+body {
+    background-color: #eef2f6; /* Hafif Gümüş-Mavi Arka Plan (Beyazlığı kırdık) */
+    color: #344767; /* Yazı rengi simsiyah değil, koyu lacivert-gri (Daha yumuşak) */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* SIDEBAR (Sol Menü) */
+.sidebar {
+    background: linear-gradient(180deg, #343a40 0%, #212529 100%); /* Hafif degrade */
+    color: white;
+    min-height: 100vh;
+    box-shadow: 4px 0 10px rgba(0,0,0,0.1); /* Menüye derinlik kattık */
+}
+
+.sidebar a {
+    color: #cfd2d6;
+    text-decoration: none;
+    padding: 14px 25px; /* Tıklama alanı genişletildi */
+    display: block;
+    transition: all 0.3s ease;
+    border-radius: 0 25px 25px 0; /* Linklerin sağ tarafını yuvarladık */
+    margin-right: 10px;
+}
+
+.sidebar a:hover, .sidebar a.active {
+    background-color: #0d6efd;
+    color: white;
+    box-shadow: 0 4px 6px rgba(13, 110, 253, 0.4); /* Aktif linke parlama efekti */
+}
+
+/* KARTLAR VE İÇERİK KUTULARI */
+.card, .card-box {
+    background-color: #ffffff;
+    border: none;
+    padding: 10px;
+    border-radius: 10px; /* Köşeler daha yuvarlak */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05); /* Modern yumuşak gölge */
+    transition: transform 0.2s;
+}
+
+.card-box:hover {
+    transform: translateY(-5px); /* Kartın üzerine gelince hafifçe yukarı kalksın */
+}
+
+/* Renkli İstatistik Kartları */
+.bg-users { background: linear-gradient(135deg, #17a2b8, #117a8b); color: white; }
+.bg-rooms { background: linear-gradient(135deg, #28a745, #1e7e34); color: white; }
+.bg-money { background: linear-gradient(135deg, #ffc107, #d39e00); color: #333; }
+.bg-alert { background: linear-gradient(135deg, #dc3545, #bd2130); color: white; }
+
+/* TABLO TASARIMI */
+.table {
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+
+.table thead {
+    background-color: #343a40;
+    color: white;
+}
+
+/* Mobil Menü Başlığı */
+.offcanvas-header { background-color: #343a40; }

@@ -1,0 +1,66 @@
+/* GENEL AYARLAR */
+body {
+    background-color: #f4f6f9;
+    color: #444;
+    font-family: 'Segoe UI', sans-serif;
+    border-top: 5px solid #f1c40f; /* Üstte Sarı Çizgi */
+}
+
+/* SIDEBAR (Sol Menü) - DÜZELTİLDİ */
+.sidebar {
+    background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%) !important;
+    color: white;
+    min-height: 100vh;
+    box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+}
+
+.sidebar a {
+    color: #95a5a6;
+    text-decoration: none;
+    padding: 14px 20px;
+    display: block;
+    transition: 0.3s;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.sidebar a:hover, .sidebar a.active {
+    background-color: #34495e;
+    color: #f1c40f; /* Aktif olunca Sarı Yazı */
+    padding-left: 25px;
+}
+
+/* HOŞ GELDİN KUTUSU (Alert) - Özelleştirildi */
+.alert-info {
+    background-color: white;
+    border-left: 5px solid #3498db;
+    color: #333;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border-radius: 8px;
+}
+
+/* KARTLAR */
+.card-box {
+    border-radius: 12px;
+    color: white;
+    padding: 25px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+.card-box:hover { transform: translateY(-3px); }
+
+.bg-info-custom { background: linear-gradient(to right, #3498db, #5dade2); }
+.bg-warning-custom { background: linear-gradient(to right, #f39c12, #f1c40f); }
+
+/* TABLO */
+.table { background: white; border-radius: 8px; overflow: hidden; }
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 10px;
+    background: white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+    border-radius: 8px !important;
+}
+
+.offcanvas-header { background-color: #2c3e50; color: white; }

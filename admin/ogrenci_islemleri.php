@@ -1,232 +1,119 @@
 <?php
 session_start();
 require_once '../config/db.php';
-
-// 1. Güvenlik
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 1) {
-    header("Location: ../index.php");
-    exit;
-}
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] != 1) { header("Location: ../index.php"); exit; }
 
 $mesaj = "";
-
-// 2. ÖĞRENCİ EKLEME (Transaction Kullanımı)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['ogrenci_ekle'])) {
-    $ad = trim($_POST['full_name']);
-    $email = trim($_POST['email']);
-    $sifre = trim($_POST['password']); // Öğrenci için varsayılan şifre atanabilir
-    $bolum = trim($_POST['department']);
-    $tel = trim($_POST['phone']);
-    $oda_id = $_POST['room_id']; // Seçilen odanın ID'si
-
-    if (!empty($ad) && !empty($email) && !empty($oda_id)) {
-        try {
-            // TRANSACTION BAŞLAT (Hepsi ya olur ya hiçbiri olmaz)
-            $pdo->beginTransaction();
-
-            // A. Kullanıcıyı Ekle (Users Tablosu)
-            $hashli_sifre = password_hash($sifre, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role_id) VALUES (?, ?, ?, 3)");
-            $stmt->execute([$ad, $email, $hashli_sifre]);
-            $yeni_user_id = $pdo->lastInsertId(); // Eklenen kişinin ID'sini al
-
-            // B. Öğrenci Detayını Ekle (Students Tablosu)
-            $stmt = $pdo->prepare("INSERT INTO students (user_id, department, phone, room_id) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$yeni_user_id, $bolum, $tel, $oda_id]);
-
-            // C. Odanın Doluluk Sayısını Artır (Rooms Tablosu)
-            $stmt = $pdo->prepare("UPDATE rooms SET current_count = current_count + 1 WHERE room_id = ?");
-            $stmt->execute([$oda_id]);
-
-            // Hata yoksa ONAYLA
-            $pdo->commit();
-            $mesaj = "<div class='alert alert-success'>Öğrenci başarıyla kaydedildi ve odaya yerleştirildi!</div>";
-
-        } catch (Exception $e) {
-            // Hata varsa GERİ AL
-            $pdo->rollBack();
-            $mesaj = "<div class='alert alert-danger'>Hata oluştu: " . $e->getMessage() . "</div>";
-        }
-    } else {
-        $mesaj = "<div class='alert alert-warning'>Lütfen zorunlu alanları doldurun.</div>";
-    }
-}
-
-// 3. ÖĞRENCİ SİLME
-if (isset($_GET['sil_id'])) {
-    $sil_user_id = $_GET['sil_id']; // URL'den gelen user_id
-
     try {
-        // Önce öğrencinin kaldığı odayı bul (Sayacı düşürmek için)
-        $stmt = $pdo->prepare("SELECT room_id FROM students WHERE user_id = ?");
-        $stmt->execute([$sil_user_id]);
-        $ogrenci = $stmt->fetch();
-
         $pdo->beginTransaction();
-
-        // Öğrenciyi Sil (Users tablosundan silince Students da silinir - Cascade)
-        $stmt = $pdo->prepare("DELETE FROM users WHERE user_id = ? AND role_id = 3");
-        $stmt->execute([$sil_user_id]);
-
-        // Odanın doluluğunu 1 azalt
-        if ($ogrenci && $ogrenci->room_id) {
-            $stmt = $pdo->prepare("UPDATE rooms SET current_count = current_count - 1 WHERE room_id = ?");
-            $stmt->execute([$ogrenci->room_id]);
-        }
-
-        $pdo->commit();
-        header("Location: ogrenci_islemleri.php");
-        exit;
-
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        $mesaj = "Hata: " . $e->getMessage();
-    }
+        $stmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role_id) VALUES (?, ?, ?, 3)");
+        $stmt->execute([$_POST['full_name'], $_POST['email'], password_hash($_POST['password'], PASSWORD_DEFAULT)]);
+        $uid = $pdo->lastInsertId();
+        $stmt = $pdo->prepare("INSERT INTO students (user_id, department, phone, room_id) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$uid, $_POST['department'], $_POST['phone'], $_POST['room_id']]);
+        $pdo->prepare("UPDATE rooms SET current_count = current_count + 1 WHERE room_id = ?")->execute([$_POST['room_id']]);
+        $pdo->commit(); $mesaj = "<div class='alert alert-success'>Öğrenci eklendi!</div>";
+    } catch (Exception $e) { $pdo->rollBack(); $mesaj = "<div class='alert alert-danger'>Hata: ".$e->getMessage()."</div>"; }
 }
-
-// 4. LİSTELEME İŞLEMLERİ
-// A. Müsait Odaları Getir (Dropdown için)
+if (isset($_GET['sil_id'])) {
+    $uid = $_GET['sil_id'];
+    $ogr = $pdo->prepare("SELECT room_id FROM students WHERE user_id = ?"); $ogr->execute([$uid]); $res = $ogr->fetch();
+    $pdo->beginTransaction();
+    $pdo->prepare("DELETE FROM users WHERE user_id = ?")->execute([$uid]);
+    if($res && $res->room_id) $pdo->prepare("UPDATE rooms SET current_count = current_count - 1 WHERE room_id = ?")->execute([$res->room_id]);
+    $pdo->commit(); header("Location: ogrenci_islemleri.php"); exit;
+}
 $musait_odalar = $pdo->query("SELECT * FROM rooms WHERE current_count < capacity ORDER BY room_number ASC")->fetchAll();
-
-// B. Öğrencileri Listele (Tablo için - JOIN Kullanarak)
-$sql = "SELECT users.user_id, users.full_name, users.email, students.department, students.phone, rooms.room_number 
-        FROM users 
-        JOIN students ON users.user_id = students.user_id 
-        LEFT JOIN rooms ON students.room_id = rooms.room_id 
-        WHERE users.role_id = 3 
-        ORDER BY users.user_id DESC";
-$ogrenciler = $pdo->query($sql)->fetchAll();
+$ogrenciler = $pdo->query("SELECT u.user_id, u.full_name, u.email, s.department, s.phone, r.room_number FROM users u JOIN students s ON u.user_id=s.user_id LEFT JOIN rooms r ON s.room_id=r.room_id WHERE u.role_id=3 ORDER BY u.user_id DESC")->fetchAll();
 ?>
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Öğrenci İşlemleri - Yurt Otomasyonu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Öğrenci İşlemleri</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { background-color: #f8f9fa; }
-        .sidebar { min-height: 100vh; background-color: #343a40; color: white; }
-        .sidebar a { color: #cfd2d6; text-decoration: none; padding: 10px 15px; display: block; }
-        .sidebar a:hover, .sidebar a.active { background-color: #495057; color: white; border-left: 4px solid #0d6efd; }
-    </style>
+    <link rel="stylesheet" href="../css/admin.css">
 </head>
 <body>
-
+<nav class="navbar navbar-dark bg-dark d-md-none p-3 mb-3"><div class="container-fluid"><span class="navbar-brand">Yurt v1.0</span><button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu"><span class="navbar-toggler-icon"></span></button></div></nav>
 <div class="container-fluid">
     <div class="row">
-        <div class="col-md-2 sidebar p-0">
-            <h4 class="text-center py-4 border-bottom border-secondary">Yurt v1.0</h4>
-            <div class="d-flex flex-column">
-                <a href="dashboard.php"><i class="fas fa-home me-2"></i> Anasayfa</a>
-                <a href="personel_islemleri.php"><i class="fas fa-user-tie me-2"></i> Personel İşlemleri</a>
-                <a href="ogrenci_islemleri.php" class="active"><i class="fas fa-user-graduate me-2"></i> Öğrenci İşlemleri</a>
-                <a href="oda_islemleri.php"><i class="fas fa-bed me-2"></i> Oda Yönetimi</a>
-                <a href="duyurular.php"><i class="fas fa-bullhorn me-2"></i> Duyurular</a>
-                <a href="yoklama_raporu.php"><i class="fas fa-calendar-check me-2"></i> Yoklama Raporu</a>
-                <a href="../logout.php" class="mt-5 text-danger"><i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap</a>
+        <div class="col-md-2 sidebar p-0 offcanvas-md offcanvas-start" tabindex="-1" id="sidebarMenu">
+             <div class="offcanvas-header d-md-none border-bottom border-secondary"><h5 class="offcanvas-title text-white">Menü</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebarMenu"></button></div>
+            <div class="offcanvas-body d-block p-0">
+                <h4 class="text-center py-4 border-bottom border-secondary d-none d-md-block">Yurt v1.0</h4>
+                <div class="d-flex flex-column mt-2">
+                    <a href="dashboard.php"><i class="fas fa-home me-2"></i> Anasayfa</a>
+                    <a href="personel_islemleri.php"><i class="fas fa-user-tie me-2"></i> Personel İşlemleri</a>
+                    <a href="ogrenci_islemleri.php" class="active"><i class="fas fa-user-graduate me-2"></i> Öğrenci İşlemleri</a>
+                    <a href="oda_islemleri.php"><i class="fas fa-bed me-2"></i> Oda Yönetimi</a>
+                    <a href="duyurular.php"><i class="fas fa-bullhorn me-2"></i> Duyurular</a>
+                    <a href="yoklama_raporu.php"><i class="fas fa-calendar-check me-2"></i> Yoklama Raporu</a>
+                    <a href="../logout.php" class="mt-5 text-danger"><i class="fas fa-sign-out-alt me-2"></i> Çıkış Yap</a>
+                </div>
             </div>
         </div>
-
         <div class="col-md-10 p-4">
-            <h2 class="mb-4">Öğrenci Kaydı ve Yerleştirme</h2>
-            
+            <h2 class="mb-4">Öğrenci Kaydı</h2>
             <?php echo $mesaj; ?>
-
             <div class="card mb-4 shadow-sm">
-                <div class="card-header bg-warning text-dark">
-                    <i class="fas fa-user-plus"></i> Yeni Öğrenci Kaydet
-                </div>
+                <div class="card-header bg-warning text-dark"><i class="fas fa-user-plus"></i> Yeni Öğrenci</div>
                 <div class="card-body">
-                    <form method="POST" action="" class="row g-3">
-                        <div class="col-md-4">
-                            <label>Ad Soyad</label>
-                            <input type="text" name="full_name" class="form-control" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label>E-Posta</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label>Şifre</label>
-                            <input type="text" name="password" class="form-control" placeholder="123456" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label>Bölüm</label>
-                            <input type="text" name="department" class="form-control" placeholder="Bilgisayar Müh.">
-                        </div>
-                        <div class="col-md-4">
-                            <label>Telefon</label>
-                            <input type="text" name="phone" class="form-control" placeholder="0555...">
-                        </div>
-                        <div class="col-md-4">
-                            <label>Oda Seçimi (Sadece Müsait Olanlar)</label>
+                    <form method="POST" class="row g-3">
+                        <div class="col-md-4"><label>Ad Soyad</label><input type="text" name="full_name" class="form-control" required></div>
+                        <div class="col-md-4"><label>E-Posta</label><input type="email" name="email" class="form-control" required></div>
+                        <div class="col-md-4"><label>Şifre</label><input type="text" name="password" class="form-control" placeholder="123456" required></div>
+                        <div class="col-md-4"><label>Bölüm</label><input type="text" name="department" class="form-control"></div>
+                        <div class="col-md-4"><label>Telefon</label><input type="text" name="phone" class="form-control"></div>
+                        <div class="col-md-4"><label>Oda</label>
                             <select name="room_id" class="form-select" required>
-                                <option value="">Oda Seçiniz...</option>
-                                <?php foreach ($musait_odalar as $oda): ?>
-                                    <option value="<?php echo $oda->room_id; ?>">
-                                        <?php echo $oda->room_number; ?> (Kapasite: <?php echo $oda->capacity - $oda->current_count; ?> Kişi Kaldı)
-                                    </option>
-                                <?php endforeach; ?>
+                                <option value="">Seçiniz...</option>
+                                <?php foreach ($musait_odalar as $o): ?><option value="<?php echo $o->room_id; ?>"><?php echo $o->room_number; ?></option><?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-12 text-end">
-                            <button type="submit" name="ogrenci_ekle" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Kaydet ve Yerleştir
-                            </button>
-                        </div>
+                        <div class="col-12 text-end"><button type="submit" name="ogrenci_ekle" class="btn btn-primary">Kaydet</button></div>
                     </form>
                 </div>
             </div>
-
             <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="fas fa-users"></i> Kayıtlı Öğrenciler</h5>
-                </div>
                 <div class="card-body">
                     <table class="table table-hover table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Ad Soyad</th>
-                                <th>Bölüm</th>
-                                <th>Telefon</th>
-                                <th>Oda</th>
-                                <th>E-Posta</th>
-                                <th>İşlem</th>
-                            </tr>
-                        </thead>
+                        <thead class="table-light"><tr><th>Ad Soyad</th><th>Bölüm</th><th>Oda</th><th>İşlem</th></tr></thead>
                         <tbody>
-                            <?php if (count($ogrenciler) > 0): ?>
-                                <?php foreach ($ogrenciler as $ogr): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($ogr->full_name); ?></td>
-                                        <td><?php echo htmlspecialchars($ogr->department); ?></td>
-                                        <td><?php echo htmlspecialchars($ogr->phone); ?></td>
-                                        <td class="fw-bold text-success">
-                                            <?php echo $ogr->room_number ? $ogr->room_number : '<span class="text-danger">Odası Yok</span>'; ?>
-                                        </td>
-                                        <td><?php echo htmlspecialchars($ogr->email); ?></td>
-                                        <td>
-                                            <a href="?sil_id=<?php echo $ogr->user_id; ?>" 
-                                               class="btn btn-sm btn-danger"
-                                               onclick="return confirm('Silmek istediğinize emin misiniz? Odanın kontenjanı 1 azaltılacak.');">
-                                                Sil
-                                            </a>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr><td colspan="6" class="text-center text-muted">Kayıtlı öğrenci yok.</td></tr>
-                            <?php endif; ?>
+                            <?php foreach ($ogrenciler as $o): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($o->full_name); ?></td><td><?php echo htmlspecialchars($o->department); ?></td>
+                                <td><?php echo $o->room_number ?? '<span class="text-danger">Yok</span>'; ?></td>
+                                <td>
+                                    <a href="ogrenci_duzenle.php?id=<?php echo $o->user_id; ?>" class="btn btn-sm btn-warning text-dark me-1"><i class="fas fa-edit"></i></a>
+                                    <a href="?sil_id=<?php echo $o->user_id; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Silinsin mi?');"><i class="fas fa-trash"></i></a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-
         </div>
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('table').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json'
+            }
+        });
+    });
+</script>
 </body>
 </html>
